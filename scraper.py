@@ -1,14 +1,14 @@
 import csv
 import time
-import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
-import sys
+
+def create_headless_chrome():
+    options = Options()
+    options.headless = True
+    return webdriver.Chrome(options=options)
 
 
 def get_csv_data(file_path):
@@ -33,17 +33,7 @@ def scroll_down(web_driver, scroll_pause = 2):
         last_height = new_height
 
 
-def wait_for_products_card(web_driver, timeout=1):
-    try:
-        products_card = EC.presence_of_element_located((By.ID, 'product-grid'))
-        print('products_card PREPARE' )
-        WebDriverWait(web_driver, timeout).until_not(products_card)
-        print('products_card READY' )
-    except:
-        print(f'Something wrong {sys.exc_info()[0]}' )
-
-
-def img_links(soup_images):
+def get_img_links(soup_images):
         links = []
         for img in soup_images:
             link = img.get('src')
@@ -56,27 +46,54 @@ def img_links(soup_images):
         return links
 
 
+def get_product_info(b_soup, url):
+    print(url)
+    try:
+        s_card = b_soup.find("div", id="productCard")
+    except AttributeError:
+        return None
+    try:
+        s_title = b_soup.find("h1", id="titleProductCard").text
+    except AttributeError:
+        s_title = 'No data'
+    try:
+        s_images = s_card.find_all('img')
+    except AttributeError:
+        s_images = []
+    try:
+        s_price = b_soup.find("div", {"class": "price"}).find("span", {"class": "number"}).text.strip()
+    except AttributeError:
+        s_price = 'No data'
+    return {
+        'url': url,
+        'title': s_title,
+        'price': s_price,
+        'images': get_img_links(s_images)
+    }
+
+
+def get_products_info(urls, web_driver, url_count=5):
+        results = []
+        
+        for url in urls[:url_count]:
+            product_url = url[3]
+            web_driver.get(product_url)
+            scroll_down(web_driver)        
+            soup = BeautifulSoup(web_driver.page_source, 'html.parser')
+            results.append(get_product_info(soup, product_url))
+
+        return results
+
+
 if __name__ == "__main__":
-    options = Options()
-    options.headless = True
-    driver = webdriver.Chrome(options=options)
+    driver = create_headless_chrome()
 
     urls_file = 'urls_20180820_053024_men01.csv'
     urls_list = get_csv_data(urls_file)
-    example_url = urls_list[1][3]
 
-    driver.get(example_url)
-    wait_for_products_card(driver, 2)
-    scroll_down(driver)
-    
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
-
+    print(get_products_info(urls_list, driver))
     driver.close()
 
-    s_card = soup.find("div", id="productCard")
-    s_images = s_card.find_all('img')
-
-    print(img_links(s_images))
 
     
 
